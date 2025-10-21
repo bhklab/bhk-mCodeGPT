@@ -79,9 +79,9 @@ if __name__ == '__main__':
 
     df_result = model.run()
 
-    output_dir = script_dir / 'output'
-    output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = output_dir / f"{args.output}.csv"
+    output_path = Path(args.output)
+    if not output_path.suffix:
+        output_path = output_path.with_suffix('.csv')
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     df_result.to_csv(output_path)
