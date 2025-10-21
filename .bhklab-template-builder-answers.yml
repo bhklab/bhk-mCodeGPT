@@ -1,0 +1,14 @@
+# Changes here will be overwritten by Copier
+_commit: v0.14.1
+_src_path: gh:bhklab/bhklab-project-template
+additional_authors_raw: Michael Tang, Matthew Boccalon
+author_email: bhklab.katyscott@gmail.com
+author_full_name: Katy Scott
+github_username: strixy16
+has_additional_authors: true
+project_description: Trying out mCodeGPT for BHKLab clinical data curation.
+project_name: BHK mCodeGPT
+project_slug: bhk-mcodegpt
+publish_to_github: false
+python_version: '3.11'
+repo_location: bhklab
