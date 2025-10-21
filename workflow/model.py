@@ -5,10 +5,8 @@ import matplotlib.pyplot as plt
 import copy
 import csv
 
-import openai
-
 class mCodeGPT:
-    def __init__(self, df_ontology, df_prompt, df_promptYesNo, deployment_name, input_text, method):
+    def __init__(self, df_ontology, df_prompt, df_promptYesNo, model_identifier, input_text, method, client):
 
         # Create a directed graph
         self.G = nx.DiGraph()
@@ -17,8 +15,9 @@ class mCodeGPT:
         self.df_promptYesNo = df_promptYesNo
 
         self.input_txt = input_text
-        self.deployment_name = deployment_name
+        self.model_identifier = model_identifier
         self.method =  method
+        self.client = client
 
         # Initialize variables to keep track of the parent node at each level
         parents = {}
@@ -228,21 +227,30 @@ class mCodeGPT:
         prompt += '\n\nText:\n'
         prompt += self.input_txt
 
-        response = openai.ChatCompletion.create(
-            # model=engine,
-            deployment_id = self.deployment_name,
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt,
-                },
-            ],
-            max_tokens=max_tokens)
+        response = self.client.responses.create(
+            model=self.model_identifier,
+            input=prompt,
+            max_output_tokens=max_tokens,
+        )
         return response
 
     def parse_output(self, response):
-        response_content = response['choices'][0]['message']['content']
-        response_content
+        response_content = getattr(response, "output_text", None)
+
+        if not response_content:
+            fragments = []
+            try:
+                for segment in response.output[0].content:
+                    text_obj = getattr(segment, "text", None)
+                    if hasattr(text_obj, "value"):
+                        fragments.append(text_obj.value)
+                    elif isinstance(text_obj, str):
+                        fragments.append(text_obj)
+            except (AttributeError, IndexError, KeyError, TypeError):
+                pass
+            response_content = "".join(fragments)
+
+        response_content = response_content or ""
 
         # Split the input data into lines
         lines = response_content.split('\n')
