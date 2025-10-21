@@ -2,6 +2,7 @@ from model import mCodeGPT
 import pandas as pd
 import argparse
 import os
+from pathlib import Path
 
 from openai import OpenAI, AzureOpenAI
 
@@ -12,9 +13,15 @@ if __name__ == '__main__':
         description='Standardize free-text data using ontology',
         epilog='Text at the bottom of help')
 
-    df_ontology = pd.read_excel('./ontology/mcode_structure.xlsx', sheet_name="Ontology")
-    df_prompt = pd.read_excel('./ontology/mcode_structure.xlsx', sheet_name="Prompt")
-    df_promptYesNo = pd.read_excel('./ontology/mcode_structure.xlsx', sheet_name="Prompt(yesno)")
+    script_dir = Path(__file__).resolve().parent
+    ontology_path = script_dir / 'ontology' / 'mcode_structure.xlsx'
+
+    if not ontology_path.exists():
+        parser.error(f"Ontology workbook not found at {ontology_path}.")
+
+    df_ontology = pd.read_excel(ontology_path, sheet_name="Ontology")
+    df_prompt = pd.read_excel(ontology_path, sheet_name="Prompt")
+    df_promptYesNo = pd.read_excel(ontology_path, sheet_name="Prompt(yesno)")
 
     parser.add_argument('-i','--input_file', help="Specify the input file for your program. For example, './input_file.txt'")
     parser.add_argument('-k', '--api_key', help="Specify the OpenAI API key for your program or set the OPENAI_API_KEY environment variable")
@@ -72,7 +79,12 @@ if __name__ == '__main__':
 
     df_result = model.run()
 
-    df_result.to_csv('./output/' + args.output + '.csv')
+    output_dir = script_dir / 'output'
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / f"{args.output}.csv"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    df_result.to_csv(output_path)
 
 
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/
