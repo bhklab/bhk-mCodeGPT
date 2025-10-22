@@ -1,7 +1,10 @@
 from model import mCodeGPT
 import pandas as pd
-import openai
 import argparse
+import os
+from pathlib import Path
+
+from openai import OpenAI, AzureOpenAI
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
@@ -10,15 +13,22 @@ if __name__ == '__main__':
         description='Standardize free-text data using ontology',
         epilog='Text at the bottom of help')
 
-    df_ontology = pd.read_excel('./ontology/mcode_structure.xlsx', sheet_name="Ontology")
-    df_prompt = pd.read_excel('./ontology/mcode_structure.xlsx', sheet_name="Prompt")
-    df_promptYesNo = pd.read_excel('./ontology/mcode_structure.xlsx', sheet_name="Prompt(yesno)")
+    script_dir = Path(__file__).resolve().parent
+    ontology_path = script_dir / 'ontology' / 'mcode_structure.xlsx'
+
+    if not ontology_path.exists():
+        parser.error(f"Ontology workbook not found at {ontology_path}.")
+
+    df_ontology = pd.read_excel(ontology_path, sheet_name="Ontology")
+    df_prompt = pd.read_excel(ontology_path, sheet_name="Prompt")
+    df_promptYesNo = pd.read_excel(ontology_path, sheet_name="Prompt(yesno)")
 
     parser.add_argument('-i','--input_file', help="Specify the input file for your program. For example, './input_file.txt'")
-    parser.add_argument('-k', '--api_key', help="Specify the Azure OpenAI API key for your program. For example, 'f90hsd8jnigkmr3253908yrh7gybfgu93qi4'")
-    parser.add_argument('-b', '--api_base', help="Specify the Azure OpenAI base for your program. For example, 'https://deploymentname.openai.azure.com/'")
-    parser.add_argument('-v', '--api_version', help="Specify the Azure OpenAI version file for your program, for example, '2023-05-15'")
-    parser.add_argument('-d', '--deployment_name', help="Specify the Azure OpenAI deployment name for your program, for example, 'mcodegpt_gpt_35'")
+    parser.add_argument('-k', '--api_key', help="Specify the OpenAI API key for your program or set the OPENAI_API_KEY environment variable")
+    parser.add_argument('-b', '--api_base', help="Specify a custom OpenAI API base. Required for Azure OpenAI.")
+    parser.add_argument('-v', '--api_version', help="Specify the Azure OpenAI API version, for example, '2023-05-15'")
+    parser.add_argument('-d', '--deployment_name', help="Specify the Azure OpenAI deployment name, for example, 'mcodegpt_gpt_35'")
+    parser.add_argument('--model', help="Specify an OpenAI model name when using the standard OpenAI API, for example, 'gpt-4o-mini'")
     parser.add_argument('-m', '--method', help="Specify the prompt generating algorithm for your program, for example, 'RLS', 'BFOP', '2POP'")
     parser.add_argument('-o', '--output', help="Specify the output file name")
     
@@ -27,17 +37,54 @@ if __name__ == '__main__':
     with open(args.input_file, 'r') as f:
         input_text = f.read()
 
-    openai.api_key = args.api_key
-    openai.api_base = args.api_base  # your endpoint should look like the following
-    openai.api_type = 'azure'
-    openai.api_version = args.api_version  # this may change in the future
-    deployment_name = args.deployment_name   # This will correspond to the custom name you chose for your deployment when you deployed a model.
+    api_key = args.api_key or os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        parser.error("An OpenAI API key must be provided via --api_key or the OPENAI_API_KEY environment variable.")
 
-    model = mCodeGPT(df_ontology, df_prompt, df_promptYesNo, deployment_name, input_text, args.method)
+    azure_fields = [args.api_base, args.api_version, args.deployment_name]
+    use_azure = all(azure_fields)
+
+    if any(field is not None for field in azure_fields) and not use_azure:
+        parser.error("To use Azure OpenAI, you must supply --api_base, --api_version, and --deployment_name together.")
+
+    model_name = args.model
+    deployment_name = args.deployment_name
+
+    if use_azure:
+        client = AzureOpenAI(
+            api_key=api_key,
+            api_version=args.api_version,
+            azure_endpoint=args.api_base,
+        )
+        model_identifier = deployment_name
+    else:
+        if not model_name:
+            parser.error("Standard OpenAI usage requires --model to specify the target model.")
+
+        client_kwargs = {"api_key": api_key}
+        if args.api_base:
+            client_kwargs["base_url"] = args.api_base
+        client = OpenAI(**client_kwargs)
+        model_identifier = model_name
+
+    model = mCodeGPT(
+        df_ontology,
+        df_prompt,
+        df_promptYesNo,
+        model_identifier,
+        input_text,
+        args.method,
+        client,
+    )
 
     df_result = model.run()
 
-    df_result.to_csv('./output/' + args.output + '.csv')
+    output_path = Path(args.output)
+    if not output_path.suffix:
+        output_path = output_path.with_suffix('.csv')
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    df_result.to_csv(output_path)
 
 
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/
